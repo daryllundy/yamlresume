@@ -22,16 +22,16 @@
  * IN THE SOFTWARE.
  */
 
-import type { OrderableSectionID, Resume } from '@/models'
+import type { OrderableSectionID, OutputFormat, Resume } from '@/models'
 import { DEFAULT_SECTIONS_ORDER } from '@/models'
 import { joinNonEmptyString, mergeArrayWithOrder } from '@/utils'
 
 /**
- * Abstract class for rendering resumes in TeX format.
+ * Abstract class for rendering resumes in various output formats.
  *
- * TeXRenderer provides the base functionality for converting Resume objects
- * into TeX documents. It follows a specific rendering order for resume
- * sections:
+ * Renderer provides the base functionality for converting Resume objects
+ * into output documents (LaTeX, Markdown, etc.). It follows a specific
+ * rendering order for resume sections:
  *
  * 1. Core information (basics, location, profiles)
  * 2. Education and career (education, work)
@@ -42,14 +42,17 @@ import { joinNonEmptyString, mergeArrayWithOrder } from '@/utils'
  */
 abstract class Renderer {
   resume: Resume
+  format: OutputFormat
 
   /**
    * Constructor for the Renderer class.
    *
    * @param resume - The resume to render.
+   * @param format - The output format (latex or markdown). Defaults to 'latex'.
    */
-  constructor(resume: Resume) {
+  constructor(resume: Resume, format: OutputFormat = 'latex') {
     this.resume = resume
+    this.format = format
   }
 
   /**

@@ -27,6 +27,7 @@ import path from 'node:path'
 import {
   getResumeRenderer,
   joinNonEmptyString,
+  type OutputFormat,
   type Resume,
   toCodeBlock,
   YAMLResumeError,
@@ -42,14 +43,19 @@ import { readResume } from './validate'
  * Infer the output file name from the source file name
  *
  * For now we support yaml, yml and json file extensions, and the output file
- * will have a `.tex` extension.
+ * will have a `.tex` or `.md` extension based on the format.
  *
  * @param resumePath - The source resume file
+ * @param format - The output format ('latex' or 'markdown')
  * @param outputDir - Optional output directory to place the file in
  * @returns The output file name
  * @throws {Error} If the source file has an unsupported extension.
  */
-export function inferOutput(resumePath: string, outputDir?: string): string {
+export function inferOutput(
+  resumePath: string,
+  format: OutputFormat,
+  outputDir?: string
+): string {
   const extname = path.extname(resumePath)
 
   if (
@@ -57,13 +63,14 @@ export function inferOutput(resumePath: string, outputDir?: string): string {
     resumePath.endsWith('.yml') ||
     resumePath.endsWith('.json')
   ) {
+    const outputExt = format === 'markdown' ? '.md' : '.tex'
     const baseName = path.basename(
-      resumePath.replace(/\.yaml|\.yml|\.json$/, '.tex')
+      resumePath.replace(/\.yaml|\.yml|\.json$/, outputExt)
     )
     if (outputDir) {
       return path.join(outputDir, baseName)
     }
-    return resumePath.replace(/\.yaml|\.yml|\.json$/, '.tex')
+    return resumePath.replace(/\.yaml|\.yml|\.json$/, outputExt)
   }
 
   throw new YAMLResumeError('INVALID_EXTNAME', { extname })
@@ -120,6 +127,7 @@ export function inferLaTeXEnvironment(): LaTeXEnvironment {
  * Infer the LaTeX command to use based on the LaTeX environment
  *
  * @param resumePath - The source resume file
+ * @param outputDir - Optional output directory for the generated tex file
  * @returns The LaTeX command
  * @throws {Error} If the LaTeX environment cannot be inferred or the source
  * file extension is unsupported.
@@ -129,7 +137,7 @@ export function inferLaTeXCommand(
   outputDir?: string
 ): { command: string; args: string[]; cwd: string } {
   const environment = inferLaTeXEnvironment()
-  const texFile = inferOutput(resumePath, outputDir)
+  const texFile = inferOutput(resumePath, 'latex', outputDir)
 
   let command = ''
   let args: string[] = []
@@ -153,70 +161,90 @@ export function inferLaTeXCommand(
 }
 
 /**
- * Compiles the resume source file to a LaTeX file.
+ * Compiles the resume source file to the specified output format.
  *
  * @param resumePath - The source resume file path (YAML, YML, or JSON).
  * @param resume - The parsed resume object.
- * @param outputDir - Optional output directory for the generated tex file.
- * @remarks This function performs file I/O: writes a .tex file.
+ * @param format - The output format ('latex' or 'markdown').
+ * @param outputDir - Optional output directory for the generated file.
+ * @remarks This function performs file I/O: writes a .tex or .md file.
  * @throws {Error} Can throw if rendering or writing fails.
  */
 export function generateTeX(
   resumePath: string,
   resume: Resume,
+  format: OutputFormat,
   outputDir?: string
 ) {
   // make sure the file has an valid extension, i.e, '.json', '.yml' or '.yaml'
-  const texFile = inferOutput(resumePath, outputDir)
+  const outputFile = inferOutput(resumePath, format, outputDir)
 
   // Create output directory if it doesn't exist
   if (outputDir && !fs.existsSync(outputDir)) {
     fs.mkdirSync(outputDir, { recursive: true })
   }
 
-  const renderer = getResumeRenderer(resume)
-  const tex = renderer.render()
+  const renderer = getResumeRenderer(resume, undefined, format)
+  const output = renderer.render()
 
   try {
-    fs.writeFileSync(texFile, tex)
+    fs.writeFileSync(outputFile, output)
   } catch (_error) {
-    throw new YAMLResumeError('FILE_WRITE_ERROR', { path: texFile })
+    throw new YAMLResumeError('FILE_WRITE_ERROR', { path: outputFile })
   }
 }
 
 /**
- * Build a YAML resume to LaTeX & PDF
+ * Build a YAML resume to the specified output format
  *
  * It first validates the resume against the schema (unless `--no-validate` flag
- * is used), then generates the .tex file (using `generateTeX`) and then runs
- * the inferred LaTeX command (e.g., xelatex or tectonic) to produce the PDF.
+ * is used), then generates the output file (using `generateTeX`) and optionally
+ * runs the inferred LaTeX command (e.g., xelatex or tectonic) to produce the PDF
+ * when format is 'latex'.
  *
  * Steps:
  * 1. read the resume from the source file
  * 2. validate the resume against YAMLResume schema (unless `--no-validate`)
- * 3. infer the LaTeX command to use
- *    3.1. infer the LaTeX environment to use
- *    3.2. infer the output destination
- * 4. build the resume to LaTeX and PDF at the same time
+ * 3. generate the output file based on format
+ * 4. if format is latex and pdf is true, compile to PDF
  *
  * @param resumePath - The source resume file path (YAML, YML, or JSON).
- * @param options - Build options including validation, PDF generation flags, and output directory.
+ * @param options - Build options including format, validation, PDF generation flags, and output directory.
  * @remarks This function performs file I/O (via `generateTeX`) and executes an
- * external process (LaTeX compiler).
- * @throws {Error} Can throw if .tex generation, LaTeX command inference, or the
+ * external process (LaTeX compiler) when format is 'latex'.
+ * @throws {Error} Can throw if output generation, LaTeX command inference, or the
  * LaTeX compilation process fails.
  */
 export async function buildResume(
   resumePath: string,
-  options: { pdf?: boolean; validate?: boolean; output?: string } = {
+  options: {
+    pdf?: boolean
+    validate?: boolean
+    output?: string
+    format?: OutputFormat
+  } = {
     pdf: true,
     validate: true,
+    format: 'latex',
   }
 ) {
+  const format = options.format || 'latex'
+
+  // Validate format option
+  if (format !== 'latex' && format !== 'markdown') {
+    throw new YAMLResumeError('INVALID_FORMAT', { format })
+  }
+
   const { resume } = readResume(resumePath, options.validate)
 
-  // Generate tex file (in output directory if specified, current directory otherwise)
-  generateTeX(resumePath, resume, options.output)
+  // Generate output file (in output directory if specified, current directory otherwise)
+  generateTeX(resumePath, resume, format, options.output)
+
+  // Skip PDF generation for markdown format
+  if (format === 'markdown') {
+    consola.success('Generated resume markdown file successfully.')
+    return
+  }
 
   if (!options.pdf) {
     consola.success('Generated resume TeX file successfully.')
@@ -246,7 +274,7 @@ export async function buildResume(
 }
 
 /**
- * Create a command instance to build a YAML resume to LaTeX and PDF
+ * Create a command instance to build a YAML resume to the specified output format
  */
 export function createBuildCommand() {
   return new Command()
@@ -256,10 +284,20 @@ export function createBuildCommand() {
     .option('--no-pdf', 'only generate TeX file without PDF')
     .option('--no-validate', 'skip resume schema validation')
     .option('-o, --output <dir>', 'output directory for generated files')
+    .option(
+      '-f, --format <format>',
+      'output format (latex or markdown)',
+      'latex'
+    )
     .action(
       async (
         resumePath: string,
-        options: { pdf: boolean; validate: boolean; output?: string }
+        options: {
+          pdf: boolean
+          validate: boolean
+          output?: string
+          format: OutputFormat
+        }
       ) => {
         try {
           await buildResume(resumePath, options)

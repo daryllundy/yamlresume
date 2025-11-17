@@ -85,6 +85,14 @@ export type OrderableSectionID = (typeof ORDERABLE_SECTION_IDS)[number]
 export type Template = (typeof TEMPLATE_OPTIONS)[number]
 
 /**
+ * A union type for all possible output formats.
+ *
+ * - `latex` - LaTeX output format (default)
+ * - `markdown` - Markdown output format
+ */
+export type OutputFormat = 'latex' | 'markdown'
+
+/**
  * A union type for all possible locale languages.
  *
  * @see {@link https://yamlresume.dev/docs/content/multi-languages}

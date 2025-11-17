@@ -149,3 +149,7 @@ packages/client/public/sw.js
 *.tex
 packages/cli/*.pdf
 packages/cli/resources/*.pdf
+
+# IDE history and AI assistant
+.history/
+.kiro/

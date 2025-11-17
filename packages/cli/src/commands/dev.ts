@@ -22,8 +22,8 @@
  * IN THE SOFTWARE.
  */
 
+import type { OutputFormat } from '@yamlresume/core'
 import chokidar from 'chokidar'
-
 import { coalesce } from 'coalescifn'
 import { Command } from 'commander'
 import { consola } from 'consola'
@@ -35,11 +35,14 @@ import { buildResume } from './build'
  *
  * @param pdf - Whether to generate PDF
  * @param validate - Whether to validate the resume
+ * @param output - Output directory for generated files
+ * @param format - Output format (latex or markdown)
  */
 type WatchOptions = {
   pdf?: boolean
   validate?: boolean
   output?: string
+  format?: OutputFormat
 }
 
 /**
@@ -56,13 +59,13 @@ type WatchOptions = {
  */
 export function watchResume(
   resumePath: string,
-  options: WatchOptions = { pdf: true, validate: true }
+  options: WatchOptions = { pdf: true, validate: true, format: 'latex' }
 ) {
-  const { pdf, validate, output } = options
+  const { pdf, validate, output, format } = options
 
   // there should be only one build running at a time
   const exclusiveBuild = coalesce(() =>
-    buildResume(resumePath, { pdf, validate, output })
+    buildResume(resumePath, { pdf, validate, output, format })
   )
 
   // initial build
@@ -107,10 +110,20 @@ export function createDevCommand() {
     .option('--no-pdf', 'only generate TeX file without PDF')
     .option('--no-validate', 'skip resume schema validation')
     .option('-o, --output <dir>', 'output directory for generated files')
+    .option(
+      '-f, --format <format>',
+      'output format (latex or markdown)',
+      'latex'
+    )
     .action(
       (
         resumePath: string,
-        options: { pdf: boolean; validate: boolean; output?: string }
+        options: {
+          pdf: boolean
+          validate: boolean
+          output?: string
+          format: OutputFormat
+        }
       ) => {
         watchResume(resumePath, options)
       }

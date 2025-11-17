@@ -27,6 +27,7 @@ import path from 'node:path'
 import {
   ErrorType,
   joinNonEmptyString,
+  type OutputFormat,
   YAMLResumeError,
 } from '@yamlresume/core'
 import type { Command } from 'commander'
@@ -73,7 +74,7 @@ function cleanupFiles() {
 }
 
 describe(inferOutput, () => {
-  it('should infer the destination file', () => {
+  it('should infer the destination file with default latex format', () => {
     const tests = [
       { resumePath: 'resume.yaml', expected: 'resume.tex' },
       { resumePath: 'resume.yml', expected: 'resume.tex' },
@@ -86,7 +87,24 @@ describe(inferOutput, () => {
     ]
 
     tests.forEach(({ resumePath, expected }) => {
-      expect(inferOutput(resumePath)).toBe(expected)
+      expect(inferOutput(resumePath, 'latex')).toBe(expected)
+    })
+  })
+
+  it('should infer the destination file with markdown format', () => {
+    const tests = [
+      { resumePath: 'resume.yaml', expected: 'resume.md' },
+      { resumePath: 'resume.yml', expected: 'resume.md' },
+      { resumePath: 'resume.json', expected: 'resume.md' },
+      { resumePath: 'resumes/resume.yaml', expected: 'resumes/resume.md' },
+      {
+        resumePath: '../resumes/resume.yaml',
+        expected: '../resumes/resume.md',
+      },
+    ]
+
+    tests.forEach(({ resumePath, expected }) => {
+      expect(inferOutput(resumePath, 'markdown')).toBe(expected)
     })
   })
 
@@ -97,7 +115,7 @@ describe(inferOutput, () => {
       const extname = path.extname(input)
 
       try {
-        inferOutput(input)
+        inferOutput(input, 'latex')
       } catch (error) {
         expect(error).toBeInstanceOf(YAMLResumeError)
         expect(error.code).toBe('INVALID_EXTNAME')
@@ -114,7 +132,7 @@ describe(inferOutput, () => {
     })
   })
 
-  it('should infer the destination file with output directory', () => {
+  it('should infer the destination file with output directory and latex format', () => {
     const tests = [
       {
         resumePath: 'resume.yaml',
@@ -144,7 +162,41 @@ describe(inferOutput, () => {
     ]
 
     tests.forEach(({ resumePath, outputDir, expected }) => {
-      expect(inferOutput(resumePath, outputDir)).toBe(expected)
+      expect(inferOutput(resumePath, 'latex', outputDir)).toBe(expected)
+    })
+  })
+
+  it('should infer the destination file with output directory and markdown format', () => {
+    const tests = [
+      {
+        resumePath: 'resume.yaml',
+        outputDir: '/output',
+        expected: '/output/resume.md',
+      },
+      {
+        resumePath: 'resume.yml',
+        outputDir: 'dist',
+        expected: 'dist/resume.md',
+      },
+      {
+        resumePath: 'resume.json',
+        outputDir: '../build',
+        expected: '../build/resume.md',
+      },
+      {
+        resumePath: 'path/to/resume.yaml',
+        outputDir: '/output',
+        expected: '/output/resume.md',
+      },
+      {
+        resumePath: '../resumes/resume.yaml',
+        outputDir: '/output',
+        expected: '/output/resume.md',
+      },
+    ]
+
+    tests.forEach(({ resumePath, outputDir, expected }) => {
+      expect(inferOutput(resumePath, 'markdown', outputDir)).toBe(expected)
     })
   })
 })
@@ -316,7 +368,7 @@ describe(generateTeX, () => {
 
   afterAll(cleanupFiles)
 
-  it('should read the resume file and generate a tex file', () => {
+  it('should read the resume file and generate a tex file with latex format', () => {
     const writeFileSync = vi
       .spyOn(fs, 'writeFileSync')
       .mockImplementation(vi.fn())
@@ -324,7 +376,19 @@ describe(generateTeX, () => {
     const resumePath = getFixture('software-engineer.yml')
     const { resume } = readResume(resumePath)
 
-    generateTeX(resumePath, resume)
+    generateTeX(resumePath, resume, 'latex')
+    expect(writeFileSync).toBeCalledTimes(1)
+  })
+
+  it('should read the resume file and generate a markdown file with markdown format', () => {
+    const writeFileSync = vi
+      .spyOn(fs, 'writeFileSync')
+      .mockImplementation(vi.fn())
+
+    const resumePath = getFixture('software-engineer.yml')
+    const { resume } = readResume(resumePath)
+
+    generateTeX(resumePath, resume, 'markdown')
     expect(writeFileSync).toBeCalledTimes(1)
   })
 
@@ -335,7 +399,7 @@ describe(generateTeX, () => {
     const { resume } = readResume(getFixture('software-engineer.yml'))
 
     try {
-      generateTeX(resumePath, resume)
+      generateTeX(resumePath, resume, 'latex')
     } catch (error) {
       expect(error).toBeInstanceOf(YAMLResumeError)
       expect(error.code).toBe('INVALID_EXTNAME')
@@ -345,7 +409,7 @@ describe(generateTeX, () => {
     }
   })
 
-  it('should throw an error if the generated tex cannot be saved', () => {
+  it('should throw an error if the generated output cannot be saved', () => {
     const writeFileSync = vi
       .spyOn(fs, 'writeFileSync')
       .mockImplementation(() => {
@@ -356,7 +420,7 @@ describe(generateTeX, () => {
     const { resume } = readResume(resumePath)
 
     try {
-      generateTeX(resumePath, resume)
+      generateTeX(resumePath, resume, 'latex')
     } catch (error) {
       expect(error).toBeInstanceOf(YAMLResumeError)
       expect(error.code).toBe('FILE_WRITE_ERROR')
@@ -377,12 +441,33 @@ describe(generateTeX, () => {
     const { resume } = readResume(resumePath)
     const outputDir = '/tmp/test-output'
 
-    generateTeX(resumePath, resume, outputDir)
+    generateTeX(resumePath, resume, 'latex', outputDir)
 
     expect(mkdirSync).toBeCalledWith(outputDir, { recursive: true })
     expect(writeFileSync).toBeCalledTimes(1)
     expect(writeFileSync).toBeCalledWith(
       path.join(outputDir, 'software-engineer.tex'),
+      expect.any(String)
+    )
+  })
+
+  it('should generate markdown file in specified output directory', () => {
+    const writeFileSync = vi
+      .spyOn(fs, 'writeFileSync')
+      .mockImplementation(vi.fn())
+    const mkdirSync = vi.spyOn(fs, 'mkdirSync').mockImplementation(vi.fn())
+    const _existsSync = vi.spyOn(fs, 'existsSync').mockReturnValue(false)
+
+    const resumePath = getFixture('software-engineer.yml')
+    const { resume } = readResume(resumePath)
+    const outputDir = '/tmp/test-output'
+
+    generateTeX(resumePath, resume, 'markdown', outputDir)
+
+    expect(mkdirSync).toBeCalledWith(outputDir, { recursive: true })
+    expect(writeFileSync).toBeCalledTimes(1)
+    expect(writeFileSync).toBeCalledWith(
+      path.join(outputDir, 'software-engineer.md'),
       expect.any(String)
     )
   })
@@ -432,10 +517,10 @@ describe(buildResume, () => {
 
   afterAll(cleanupFiles)
 
-  it('should generate a tex file if pdf option is false', async () => {
+  it('should generate a tex file if pdf option is false with latex format', async () => {
     const resumePath = getFixture('software-engineer.yml')
 
-    await buildResume(resumePath, { pdf: false })
+    await buildResume(resumePath, { pdf: false, format: 'latex' })
 
     expect(execSpy).toBeCalledTimes(0)
 
@@ -445,10 +530,23 @@ describe(buildResume, () => {
     expect(consolaSuccessSpy).toBeCalledTimes(1)
   })
 
-  it('should generate a pdf file', async () => {
+  it('should generate a markdown file if format is markdown', async () => {
     const resumePath = getFixture('software-engineer.yml')
 
-    const texFile = inferOutput(resumePath)
+    await buildResume(resumePath, { pdf: false, format: 'markdown' })
+
+    expect(execSpy).toBeCalledTimes(0)
+
+    expect(whichSpy).not.toBeCalled()
+
+    expect(outputStr).toEqual(['Generated resume markdown file successfully.'])
+    expect(consolaSuccessSpy).toBeCalledTimes(1)
+  })
+
+  it('should generate a pdf file with default latex format', async () => {
+    const resumePath = getFixture('software-engineer.yml')
+
+    const texFile = inferOutput(resumePath, 'latex')
 
     await buildResume(resumePath)
 
@@ -478,7 +576,7 @@ describe(buildResume, () => {
 
     const resumePath = getFixture('software-engineer.yml')
 
-    const texFile = inferOutput(resumePath)
+    const texFile = inferOutput(resumePath, 'latex')
 
     try {
       await buildResume(resumePath)
@@ -523,7 +621,7 @@ describe(buildResume, () => {
   it('should generate pdf file in output directory', async () => {
     const outputDir = '/tmp/test-output'
     const resumePath = getFixture('software-engineer.yml')
-    const texFile = inferOutput(resumePath, outputDir)
+    const texFile = inferOutput(resumePath, 'latex', outputDir)
 
     await buildResume(resumePath, { pdf: true, output: outputDir })
 
@@ -540,6 +638,37 @@ describe(buildResume, () => {
     expect(consolaStartSpy).toBeCalledTimes(1)
     expect(consolaSuccessSpy).toBeCalledTimes(1)
     expect(consolaDebugSpy).toBeCalledTimes(1)
+  })
+
+  it('should skip pdf generation when format is markdown', async () => {
+    const resumePath = getFixture('software-engineer.yml')
+
+    await buildResume(resumePath, { pdf: true, format: 'markdown' })
+
+    expect(execSpy).toBeCalledTimes(0)
+    expect(whichSpy).not.toBeCalled()
+    expect(outputStr).toEqual(['Generated resume markdown file successfully.'])
+    expect(consolaSuccessSpy).toBeCalledTimes(1)
+  })
+
+  it('should throw an error for invalid format', async () => {
+    const resumePath = getFixture('software-engineer.yml')
+    const invalidFormat = 'html' as OutputFormat
+
+    await expect(
+      buildResume(resumePath, { format: invalidFormat })
+    ).rejects.toThrow(YAMLResumeError)
+
+    await expect(
+      buildResume(resumePath, { format: invalidFormat })
+    ).rejects.toMatchObject({
+      code: 'INVALID_FORMAT',
+      message:
+        'Invalid output format: html. Supported formats are: latex, markdown.',
+    })
+
+    expect(execSpy).toBeCalledTimes(0)
+    expect(whichSpy).not.toBeCalled()
   })
 })
 
@@ -604,7 +733,7 @@ describe(createBuildCommand, () => {
     )
   })
 
-  it('should build resume to PDF', async () => {
+  it('should build resume to PDF with default latex format', async () => {
     const resumePath = getFixture('software-engineer.yml')
 
     await buildCommand.parseAsync(['yamlresume', 'build', resumePath])
@@ -612,13 +741,45 @@ describe(createBuildCommand, () => {
     expect(whichSpy).toBeCalledWith('xelatex')
     expect(execSpy).toBeCalledWith(
       'xelatex',
-      ['-halt-on-error', path.basename(inferOutput(resumePath))],
+      ['-halt-on-error', path.basename(inferOutput(resumePath, 'latex'))],
       {
-        cwd: path.dirname(path.resolve(inferOutput(resumePath))),
+        cwd: path.dirname(path.resolve(inferOutput(resumePath, 'latex'))),
         encoding: 'utf8',
       }
     )
     expect(consolaStartSpy).toBeCalledTimes(1)
+    expect(consolaSuccessSpy).toBeCalledTimes(1)
+  })
+
+  it('should build resume to markdown with format option', async () => {
+    const resumePath = getFixture('software-engineer.yml')
+
+    await buildCommand.parseAsync([
+      'yamlresume',
+      'build',
+      '--format',
+      'markdown',
+      resumePath,
+    ])
+
+    expect(whichSpy).not.toBeCalled()
+    expect(execSpy).not.toBeCalled()
+    expect(consolaSuccessSpy).toBeCalledTimes(1)
+  })
+
+  it('should build resume to markdown with -f shorthand', async () => {
+    const resumePath = getFixture('software-engineer.yml')
+
+    await buildCommand.parseAsync([
+      'yamlresume',
+      'build',
+      '-f',
+      'markdown',
+      resumePath,
+    ])
+
+    expect(whichSpy).not.toBeCalled()
+    expect(execSpy).not.toBeCalled()
     expect(consolaSuccessSpy).toBeCalledTimes(1)
   })
 
@@ -662,5 +823,16 @@ describe(createBuildCommand, () => {
     expect(outputOption?.description).toBe(
       'output directory for generated files'
     )
+  })
+
+  it('should accept format option', () => {
+    const options = buildCommand.options
+    const formatOption = options.find(
+      (opt) => opt.short === '-f' || opt.long === '--format'
+    )
+
+    expect(formatOption).toBeDefined()
+    expect(formatOption?.short).toBe('-f')
+    expect(formatOption?.long).toBe('--format')
   })
 })

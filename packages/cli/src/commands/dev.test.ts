@@ -177,6 +177,41 @@ describe(watchResume, () => {
 
     expect(consolaStartSpy).not.toBeCalled()
   })
+
+  it('should pass format option to buildResume', () => {
+    watchResume(resumePath, {
+      pdf: false,
+      validate: true,
+      format: 'markdown',
+    })
+
+    expect(buildResumeSpy).toBeCalledTimes(1)
+    expect(buildResumeSpy).toBeCalledWith(resumePath, {
+      pdf: false,
+      validate: true,
+      format: 'markdown',
+    })
+  })
+
+  it('should regenerate with markdown format on file changes', () => {
+    watchResume(resumePath, {
+      pdf: false,
+      validate: true,
+      format: 'markdown',
+    })
+
+    expect(buildResumeSpy).toBeCalledTimes(1)
+
+    // Trigger change event
+    handlers.change.forEach((h) => h('software-engineer.yml'))
+
+    expect(buildResumeSpy).toBeCalledTimes(2)
+    expect(buildResumeSpy).toHaveBeenLastCalledWith(resumePath, {
+      pdf: false,
+      validate: true,
+      format: 'markdown',
+    })
+  })
 })
 
 describe(createDevCommand, () => {
@@ -221,5 +256,29 @@ describe(createDevCommand, () => {
 
     expect(chokidarWatchSpy).toBeCalledTimes(1)
     expect(buildResumeSpy).toBeCalledTimes(1)
+  })
+
+  it('should accept format option and pass it to buildResume', () => {
+    const resumePath = getFixture('software-engineer.yml')
+    devCommand.parse(['yamlresume', 'dev', resumePath, '--format', 'markdown'])
+
+    expect(buildResumeSpy).toBeCalledTimes(1)
+    expect(buildResumeSpy).toBeCalledWith(resumePath, {
+      pdf: true,
+      validate: true,
+      format: 'markdown',
+    })
+  })
+
+  it('should default to latex format when format option is not provided', () => {
+    const resumePath = getFixture('software-engineer.yml')
+    devCommand.parse(['yamlresume', 'dev', resumePath])
+
+    expect(buildResumeSpy).toBeCalledTimes(1)
+    expect(buildResumeSpy).toBeCalledWith(resumePath, {
+      pdf: true,
+      validate: true,
+      format: 'latex',
+    })
   })
 })

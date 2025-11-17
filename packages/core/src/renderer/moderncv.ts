@@ -22,8 +22,13 @@
  * IN THE SOFTWARE.
  */
 
-import type { Parser } from '@/compiler'
-import type { Resume } from '@/models'
+import {
+  LatexCodeGenerator,
+  MarkdownCodeGenerator,
+  type Parser,
+} from '@/compiler'
+import type { CodeGenerator } from '@/compiler/codegen/interface'
+import type { OutputFormat, Resume } from '@/models'
 import { transformResume } from '@/preprocess'
 import { getTemplateTranslations } from '@/translations'
 import {
@@ -48,6 +53,7 @@ import {
  */
 class ModerncvBase extends Renderer {
   style: ModerncvStyle
+  codeGenerator: CodeGenerator
 
   /**
    * Constructor for the ModerncvBase class.
@@ -56,10 +62,20 @@ class ModerncvBase extends Renderer {
    * @param style - The moderncv style
    * @param summaryParser - The summary parser used to parse summary field in
    * various sections.
+   * @param format - The output format (latex or markdown). Defaults to 'latex'.
    */
-  constructor(resume: Resume, style: ModerncvStyle, summaryParser: Parser) {
-    super(transformResume(resume, summaryParser))
+  constructor(
+    resume: Resume,
+    style: ModerncvStyle,
+    summaryParser: Parser,
+    format: OutputFormat = 'latex'
+  ) {
+    super(transformResume(resume, summaryParser), format)
     this.style = style
+    this.codeGenerator =
+      format === 'markdown'
+        ? new MarkdownCodeGenerator()
+        : new LatexCodeGenerator()
   }
 
   /**
@@ -154,7 +170,7 @@ class ModerncvBase extends Renderer {
   /**
    * Render the summary section of the resume.
    *
-   * @returns The LaTeX code for the summary section
+   * @returns The output code for the summary section
    */
   renderSummary(): string {
     const {
@@ -166,18 +182,23 @@ class ModerncvBase extends Renderer {
       },
     } = this.resume
 
-    return `${showIfNotEmpty(
-      summary,
-      `\\section{${sectionNames.basics}}
+    if (!summary) {
+      return ''
+    }
+
+    if (this.format === 'markdown') {
+      return `## ${sectionNames.basics}\n\n${summary}\n`
+    }
+
+    return `\\section{${sectionNames.basics}}
 
 \\cvline{}{${summary}}`
-    )}`
   }
 
   /**
    * Render the education section of the resume.
    *
-   * @returns The LaTeX code for the education section
+   * @returns The output code for the education section
    */
   renderEducation(): string {
     const {
@@ -195,6 +216,35 @@ class ModerncvBase extends Renderer {
 
     if (!education.length) {
       return ''
+    }
+
+    if (this.format === 'markdown') {
+      return `## ${sectionNames.education}\n\n${education
+        .map(
+          ({
+            computed: {
+              startDate,
+              dateRange,
+              degreeAreaAndScore,
+              summary,
+              courses,
+            },
+            institution,
+            url,
+          }) => {
+            const title = `### ${degreeAreaAndScore} at ${institution}`
+            const date = startDate ? `*${dateRange}*` : ''
+            const link = url ? `\n\n${url}` : ''
+            const details = []
+            if (summary) details.push(summary)
+            if (courses) details.push(`**${terms.courses}**${colon} ${courses}`)
+            const detailsText = details.length
+              ? `\n\n${details.join('\n\n')}`
+              : ''
+            return `${title}\n${date}${link}${detailsText}`
+          }
+        )
+        .join('\n\n')}\n`
     }
 
     return `\\section{${sectionNames.education}}
@@ -230,7 +280,7 @@ ${education
   /**
    * Render the work section of the resume.
    *
-   * @returns The LaTeX code for the work section
+   * @returns The output code for the work section
    */
   renderWork(): string {
     const { content, layout } = this.resume
@@ -242,6 +292,31 @@ ${education
 
     if (!content.work.length) {
       return ''
+    }
+
+    if (this.format === 'markdown') {
+      return `## ${content.computed.sectionNames.work}\n\n${content.work
+        .map((work) => {
+          const {
+            computed: { startDate, dateRange, summary, keywords },
+            name,
+            position,
+            url,
+          } = work
+
+          const title = `### ${position} at ${name}`
+          const date = startDate ? `*${dateRange}*` : ''
+          const link = url ? `\n\n${url}` : ''
+          const details = []
+          if (summary) details.push(summary)
+          if (keywords)
+            details.push(`**${terms.keywords}**${colon} ${keywords}`)
+          const detailsText = details.length
+            ? `\n\n${details.join('\n\n')}`
+            : ''
+          return `${title}\n${date}${link}${detailsText}`
+        })
+        .join('\n\n')}\n`
     }
 
     return `\\section{${content.computed.sectionNames.work}}
@@ -280,7 +355,7 @@ ${content.work
   /**
    * Render the languages section of the resume.
    *
-   * @returns The LaTeX code for the languages section
+   * @returns The output code for the languages section
    */
   renderLanguages(): string {
     const {
@@ -300,6 +375,17 @@ ${content.work
       terms,
     } = getTemplateTranslations(layout.locale?.language)
 
+    if (this.format === 'markdown') {
+      return `## ${sectionNames.languages}\n\n${languages
+        .map(({ computed: { language, fluency, keywords } }) => {
+          const keywordsText = keywords
+            ? ` - **${terms.keywords}**${colon} ${keywords}`
+            : ''
+          return `- **${language}**: ${fluency}${keywordsText}`
+        })
+        .join('\n')}\n`
+    }
+
     return `\\section{${sectionNames.languages}}
 
 ${languages
@@ -316,7 +402,7 @@ ${languages
   /**
    * Render the skills section of the resume.
    *
-   * @returns The LaTeX code for the skills section
+   * @returns The output code for the skills section
    */
   renderSkills(): string {
     const {
@@ -336,6 +422,17 @@ ${languages
       return ''
     }
 
+    if (this.format === 'markdown') {
+      return `## ${sectionNames.skills}\n\n${skills
+        .map(({ name, computed: { level, keywords } }) => {
+          const keywordsText = keywords
+            ? ` - **${terms.keywords}**${colon} ${keywords}`
+            : ''
+          return `- **${name}**: ${level}${keywordsText}`
+        })
+        .join('\n')}\n`
+    }
+
     return `\\section{${sectionNames.skills}}
 
 ${skills
@@ -352,7 +449,7 @@ ${skills
   /**
    * Render the awards section of the resume.
    *
-   * @returns The LaTeX code for the awards section
+   * @returns The output code for the awards section
    */
   renderAwards(): string {
     const {
@@ -364,6 +461,16 @@ ${skills
 
     if (!awards.length) {
       return ''
+    }
+
+    if (this.format === 'markdown') {
+      return `## ${sectionNames.awards}\n\n${awards
+        .map(({ computed: { date, summary }, awarder, title }) => {
+          const dateText = date ? `*${date}*` : ''
+          const summaryText = summary ? `\n\n${summary}` : ''
+          return `### ${title} from ${awarder}\n${dateText}${summaryText}`
+        })
+        .join('\n\n')}\n`
     }
 
     return `\\section{${sectionNames.awards}}
@@ -383,7 +490,7 @@ ${awards
   /**
    * Render the certificates section of the resume.
    *
-   * @returns The LaTeX code for the certificates section
+   * @returns The output code for the certificates section
    */
   renderCertificates(): string {
     const {
@@ -395,6 +502,16 @@ ${awards
 
     if (!certificates.length) {
       return ''
+    }
+
+    if (this.format === 'markdown') {
+      return `## ${sectionNames.certificates}\n\n${certificates
+        .map(({ computed: { date }, issuer, name, url }) => {
+          const dateText = date ? `*${date}*` : ''
+          const link = url ? `\n\n${url}` : ''
+          return `### ${name} from ${issuer}\n${dateText}${link}`
+        })
+        .join('\n\n')}\n`
     }
 
     return `\\section{${sectionNames.certificates}}
@@ -414,7 +531,7 @@ ${certificates
   /**
    * Render the publications section of the resume.
    *
-   * @returns The LaTeX code for the publications section
+   * @returns The output code for the publications section
    */
   renderPublications(): string {
     const {
@@ -426,6 +543,17 @@ ${certificates
 
     if (!publications.length) {
       return ''
+    }
+
+    if (this.format === 'markdown') {
+      return `## ${sectionNames.publications}\n\n${publications
+        .map(({ computed: { releaseDate, summary }, name, publisher, url }) => {
+          const dateText = releaseDate ? `*${releaseDate}*` : ''
+          const link = url ? `\n\n${url}` : ''
+          const summaryText = summary ? `\n\n${summary}` : ''
+          return `### ${name} - ${publisher}\n${dateText}${link}${summaryText}`
+        })
+        .join('\n\n')}\n`
     }
 
     return `\\section{${sectionNames.publications}}
@@ -450,7 +578,7 @@ ${publications
   /**
    * Render the references section of the resume.
    *
-   * @returns The LaTeX code for the references section
+   * @returns The output code for the references section
    */
   renderReferences(): string {
     const {
@@ -462,6 +590,20 @@ ${publications
 
     if (!references.length) {
       return ''
+    }
+
+    if (this.format === 'markdown') {
+      return `## ${sectionNames.references}\n\n${references
+        .map(({ email, relationship, name, phone, computed: { summary } }) => {
+          const relationshipText = relationship ? ` - ${relationship}` : ''
+          const contactParts = [email, phone].filter(Boolean)
+          const contact = contactParts.length
+            ? `\n\n${contactParts.join(' | ')}`
+            : ''
+          const summaryText = summary ? `\n\n${summary}` : ''
+          return `### ${name}${relationshipText}${contact}${summaryText}`
+        })
+        .join('\n\n')}\n`
     }
 
     switch (this.style) {
@@ -517,7 +659,7 @@ ${references
   /**
    * Render the projects section of the resume.
    *
-   * @returns The LaTeX code for the projects section
+   * @returns The output code for the projects section
    */
   renderProjects(): string {
     const { content } = this.resume
@@ -528,6 +670,33 @@ ${references
 
     if (!content.projects.length) {
       return ''
+    }
+
+    if (this.format === 'markdown') {
+      return `## ${content.computed.sectionNames.projects}\n\n${content.projects
+        .map(
+          ({
+            name,
+            description,
+            url,
+            computed: { dateRange, startDate, summary, keywords },
+          }) => {
+            const title = description
+              ? `### ${name} - ${description}`
+              : `### ${name}`
+            const date = startDate ? `*${dateRange}*` : ''
+            const link = url ? `\n\n${url}` : ''
+            const details = []
+            if (summary) details.push(summary)
+            if (keywords)
+              details.push(`**${terms.keywords}**${colon} ${keywords}`)
+            const detailsText = details.length
+              ? `\n\n${details.join('\n\n')}`
+              : ''
+            return `${title}\n${date}${link}${detailsText}`
+          }
+        )
+        .join('\n\n')}\n`
     }
 
     return `\\section{${content.computed.sectionNames.projects}}
@@ -564,13 +733,22 @@ ${content.projects
   /**
    * Render the interests section of the resume.
    *
-   * @returns The LaTeX code for the interests section
+   * @returns The output code for the interests section
    */
   renderInterests(): string {
     const { content } = this.resume
 
     if (!content.interests.length) {
       return ''
+    }
+
+    if (this.format === 'markdown') {
+      return `## ${content.computed.sectionNames.interests}\n\n${content.interests
+        .map(({ name, computed: { keywords } }) => {
+          const keywordsText = keywords ? `: ${keywords}` : ''
+          return `- **${name}**${keywordsText}`
+        })
+        .join('\n')}\n`
     }
 
     return `\\section{${content.computed.sectionNames.interests}}
@@ -583,13 +761,32 @@ ${content.interests
   /**
    * Render the volunteer section of the resume.
    *
-   * @returns The LaTeX code for the volunteer section
+   * @returns The output code for the volunteer section
    */
   renderVolunteer(): string {
     const { content } = this.resume
 
     if (!content.volunteer.length) {
       return ''
+    }
+
+    if (this.format === 'markdown') {
+      return `## ${content.computed.sectionNames.volunteer}\n\n${content.volunteer
+        .map(
+          ({
+            position,
+            organization,
+            url,
+            computed: { startDate, dateRange, summary },
+          }) => {
+            const title = `### ${position} at ${organization}`
+            const date = startDate ? `*${dateRange}*` : ''
+            const link = url ? `\n\n${url}` : ''
+            const summaryText = summary ? `\n\n${summary}` : ''
+            return `${title}\n${date}${link}${summaryText}`
+          }
+        )
+        .join('\n\n')}\n`
     }
 
     return `\\section{${content.computed.sectionNames.volunteer}}
@@ -615,10 +812,12 @@ ${content.volunteer
   /**
    * Render the resume.
    *
-   * @returns The LaTeX code for the resume
+   * @returns The output code for the resume (LaTeX or Markdown)
    */
   render(): string {
-    return this.generateTeX()
+    return this.format === 'markdown'
+      ? this.generateMarkdown()
+      : this.generateTeX()
   }
 
   /**
@@ -641,14 +840,50 @@ ${content.volunteer
 ${this.renderOrderedSections()}
 \\end{document}`
   }
+
+  /**
+   * Generate the Markdown code for the resume.
+   *
+   * @returns The Markdown code for the resume
+   */
+  private generateMarkdown(): string {
+    const {
+      content: {
+        basics: { name, headline, phone, email },
+        location,
+        computed: { urls },
+      },
+    } = this.resume
+
+    // H1 for name
+    const header = `# ${name}\n\n`
+
+    // Contact information
+    const contactParts = [email, phone]
+    if (location?.computed?.fullAddress) {
+      contactParts.push(location.computed.fullAddress)
+    }
+    if (urls) {
+      contactParts.push(urls)
+    }
+    const contact = contactParts.filter(Boolean).join(' | ')
+
+    const headlineSection = headline ? `\n\n${headline}\n` : ''
+
+    return `${header}${contact}${headlineSection}\n\n${this.renderOrderedSections()}`
+  }
 }
 
 /**
  * Renderer for the banking style of moderncv.
  */
 class ModerncvBankingRenderer extends ModerncvBase {
-  constructor(resume: Resume, summaryParser: Parser) {
-    super(resume, 'banking', summaryParser)
+  constructor(
+    resume: Resume,
+    summaryParser: Parser,
+    format: OutputFormat = 'latex'
+  ) {
+    super(resume, 'banking', summaryParser, format)
   }
 }
 
@@ -656,8 +891,12 @@ class ModerncvBankingRenderer extends ModerncvBase {
  * Renderer for the casual style of moderncv.
  */
 class ModerncvCasualRenderer extends ModerncvBase {
-  constructor(resume: Resume, summaryParser: Parser) {
-    super(resume, 'casual', summaryParser)
+  constructor(
+    resume: Resume,
+    summaryParser: Parser,
+    format: OutputFormat = 'latex'
+  ) {
+    super(resume, 'casual', summaryParser, format)
   }
 }
 
@@ -665,8 +904,12 @@ class ModerncvCasualRenderer extends ModerncvBase {
  * Renderer for the classic style of moderncv.
  */
 class ModerncvClassicRenderer extends ModerncvBase {
-  constructor(resume: Resume, summaryParser: Parser) {
-    super(resume, 'classic', summaryParser)
+  constructor(
+    resume: Resume,
+    summaryParser: Parser,
+    format: OutputFormat = 'latex'
+  ) {
+    super(resume, 'classic', summaryParser, format)
   }
 }
 

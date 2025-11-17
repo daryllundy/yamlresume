@@ -30,5 +30,5 @@ export type {
   ParagraphNode,
   TextNode,
 } from './ast'
-export { LatexCodeGenerator } from './codegen'
+export { LatexCodeGenerator, MarkdownCodeGenerator } from './codegen'
 export { MarkdownParser, type Parser } from './parser'

@@ -23,3 +23,4 @@
  */
 
 export { LatexCodeGenerator } from './latex'
+export { MarkdownCodeGenerator } from './markdown'

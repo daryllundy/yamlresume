@@ -26,7 +26,7 @@ import { cloneDeep } from 'lodash-es'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { MarkdownParser } from '@/compiler'
-import { FILLED_RESUME, type Resume } from '@/models'
+import { FILLED_RESUME, type OutputFormat, type Resume } from '@/models'
 import {
   ModerncvBankingRenderer,
   ModerncvBase,
@@ -823,6 +823,262 @@ describe('ModerncvBase', () => {
       expect(educationIndex).toBe(-1)
       expect(workIndex).toBe(-1)
       expect(skillsIndex).toBe(-1)
+    })
+  })
+})
+
+describe('Markdown Rendering', () => {
+  let resume: Resume
+  let renderer: ModerncvBase
+  const summaryParser = new MarkdownParser()
+  const format: OutputFormat = 'markdown'
+
+  beforeEach(() => {
+    resume = cloneDeep(FILLED_RESUME)
+    renderer = new ModerncvBankingRenderer(resume, summaryParser, format)
+  })
+
+  it('should generate complete markdown document', () => {
+    const result = renderer.render()
+
+    // Should have H1 for name
+    expect(result).toMatch(/^# /)
+    // Should not contain LaTeX commands
+    expect(result).not.toContain('\\documentclass')
+    expect(result).not.toContain('\\begin{document}')
+    expect(result).not.toContain('\\maketitle')
+    // Should contain H2 sections
+    expect(result).toMatch(/## /)
+  })
+
+  it('should render name as H1', () => {
+    resume.content.basics.name = 'Jane Doe'
+    renderer = new ModerncvBankingRenderer(resume, summaryParser, format)
+    const result = renderer.render()
+
+    expect(result).toMatch(/^# Jane Doe/)
+  })
+
+  it('should render contact information', () => {
+    resume.content.basics.email = 'jane@example.com'
+    resume.content.basics.phone = '+1234567890'
+    renderer = new ModerncvBankingRenderer(resume, summaryParser, format)
+    const result = renderer.render()
+
+    expect(result).toContain('jane@example.com')
+    expect(result).toContain('+1234567890')
+  })
+
+  describe('renderSummary (markdown)', () => {
+    it('should render summary as H2 section', () => {
+      resume.content.basics.summary = 'Experienced software engineer'
+      renderer = new ModerncvBankingRenderer(resume, summaryParser, format)
+      const result = renderer.renderSummary()
+
+      expect(result).toMatch(/^## /)
+      expect(result).toContain('Experienced software engineer')
+    })
+
+    it('should return empty string if no summary', () => {
+      resume.content.basics.summary = undefined
+      renderer = new ModerncvBankingRenderer(resume, summaryParser, format)
+      const result = renderer.renderSummary()
+
+      expect(result).toBe('')
+    })
+  })
+
+  describe('renderEducation (markdown)', () => {
+    it('should render education entries as H3', () => {
+      resume.content.education = [
+        {
+          institution: 'University',
+          area: 'Computer Science',
+          degree: 'Bachelor',
+          startDate: '2020-01',
+          endDate: '2024-01',
+          summary: '',
+        },
+      ]
+      renderer = new ModerncvBankingRenderer(resume, summaryParser, format)
+      const result = renderer.renderEducation()
+
+      expect(result).toMatch(/^## Education/)
+      expect(result).toMatch(/### Bachelor, Computer Science at University/)
+      expect(result).toMatch(/\*.*--.*\*/)
+    })
+
+    it('should return empty string if no education', () => {
+      resume.content.education = []
+      renderer = new ModerncvBankingRenderer(resume, summaryParser, format)
+      const result = renderer.renderEducation()
+
+      expect(result).toBe('')
+    })
+  })
+
+  describe('renderWork (markdown)', () => {
+    it('should render work entries as H3', () => {
+      resume.content.work = [
+        {
+          name: 'Tech Company',
+          position: 'Software Engineer',
+          startDate: '2020-01',
+          endDate: '2024-01',
+          summary: '',
+        },
+      ]
+      renderer = new ModerncvBankingRenderer(resume, summaryParser, format)
+      const result = renderer.renderWork()
+
+      expect(result).toMatch(/^## Work/)
+      expect(result).toMatch(/### Software Engineer at Tech Company/)
+      expect(result).toMatch(/\*.*--.*\*/)
+    })
+
+    it('should return empty string if no work', () => {
+      resume.content.work = []
+      renderer = new ModerncvBankingRenderer(resume, summaryParser, format)
+      const result = renderer.renderWork()
+
+      expect(result).toBe('')
+    })
+  })
+
+  describe('renderLanguages (markdown)', () => {
+    it('should render languages as bullet list', () => {
+      resume.content.languages = [
+        {
+          language: 'English',
+          fluency: 'Native or Bilingual Proficiency',
+        },
+      ]
+      renderer = new ModerncvBankingRenderer(resume, summaryParser, format)
+      const result = renderer.renderLanguages()
+
+      expect(result).toMatch(/^## Languages/)
+      expect(result).toContain('- **English**: Native or Bilingual Proficiency')
+    })
+
+    it('should return empty string if no languages', () => {
+      resume.content.languages = []
+      renderer = new ModerncvBankingRenderer(resume, summaryParser, format)
+      const result = renderer.renderLanguages()
+
+      expect(result).toBe('')
+    })
+  })
+
+  describe('renderSkills (markdown)', () => {
+    it('should render skills as bullet list', () => {
+      resume.content.skills = [
+        {
+          name: 'Programming',
+          level: 'Expert',
+        },
+      ]
+      renderer = new ModerncvBankingRenderer(resume, summaryParser, format)
+      const result = renderer.renderSkills()
+
+      expect(result).toMatch(/^## Skills/)
+      expect(result).toContain('- **Programming**: Expert')
+    })
+
+    it('should return empty string if no skills', () => {
+      resume.content.skills = []
+      renderer = new ModerncvBankingRenderer(resume, summaryParser, format)
+      const result = renderer.renderSkills()
+
+      expect(result).toBe('')
+    })
+  })
+
+  describe('renderProjects (markdown)', () => {
+    it('should render projects as H3', () => {
+      resume.content.projects = [
+        {
+          name: 'Open Source Project',
+          description: 'A cool project',
+          startDate: '2023-01',
+          endDate: '2023-12',
+          summary: '',
+        },
+      ]
+      renderer = new ModerncvBankingRenderer(resume, summaryParser, format)
+      const result = renderer.renderProjects()
+
+      expect(result).toMatch(/^## Projects/)
+      expect(result).toMatch(/### Open Source Project - A cool project/)
+      expect(result).toMatch(/\*.*--.*\*/)
+    })
+
+    it('should return empty string if no projects', () => {
+      resume.content.projects = []
+      renderer = new ModerncvBankingRenderer(resume, summaryParser, format)
+      const result = renderer.renderProjects()
+
+      expect(result).toBe('')
+    })
+  })
+
+  describe('section ordering (markdown)', () => {
+    it('should respect custom section order', () => {
+      resume.layout = {
+        ...resume.layout,
+        sections: {
+          order: ['work', 'education', 'skills'],
+        },
+      }
+      renderer = new ModerncvBankingRenderer(resume, summaryParser, format)
+      const result = renderer.render()
+
+      const workIndex = result.indexOf('## Work')
+      const educationIndex = result.indexOf('## Education')
+      const skillsIndex = result.indexOf('## Skills')
+
+      expect(workIndex).toBeGreaterThan(-1)
+      expect(educationIndex).toBeGreaterThan(-1)
+      expect(skillsIndex).toBeGreaterThan(-1)
+      expect(workIndex).toBeLessThan(educationIndex)
+      expect(educationIndex).toBeLessThan(skillsIndex)
+    })
+
+    it('should filter out empty sections', () => {
+      resume.content.education = []
+      resume.content.work = []
+      renderer = new ModerncvBankingRenderer(resume, summaryParser, format)
+      const result = renderer.render()
+
+      expect(result).not.toContain('## Education')
+      expect(result).not.toContain('## Work')
+    })
+  })
+
+  describe('markdown format consistency', () => {
+    it('should use consistent header hierarchy', () => {
+      renderer = new ModerncvBankingRenderer(resume, summaryParser, format)
+      const result = renderer.render()
+
+      // H1 should only appear once (for name)
+      const h1Count = (result.match(/^# /gm) || []).length
+      expect(h1Count).toBe(1)
+
+      // H2 should be used for sections
+      expect(result).toMatch(/^## /m)
+
+      // H3 should be used for entries
+      expect(result).toMatch(/^### /m)
+    })
+
+    it('should not contain LaTeX commands', () => {
+      renderer = new ModerncvBankingRenderer(resume, summaryParser, format)
+      const result = renderer.render()
+
+      expect(result).not.toContain('\\section')
+      expect(result).not.toContain('\\cventry')
+      expect(result).not.toContain('\\cvline')
+      expect(result).not.toContain('\\textbf')
+      expect(result).not.toContain('\\href')
     })
   })
 })

@@ -25,7 +25,7 @@
 import { get } from 'lodash-es'
 
 import { MarkdownParser, type Parser } from '@/compiler'
-import type { Resume } from '@/models'
+import type { OutputFormat, Resume } from '@/models'
 import type { Renderer } from './base'
 import {
   ModerncvBankingRenderer,
@@ -45,21 +45,25 @@ const RESUME_RENDERER_MAP = {
  * @param {Resume} resume - The resume object
  * @param {Parser} summaryParser - The parser instance for the summary field.
  * Default to `MarkdownParser` if not provided.
+ * @param {OutputFormat} format - The output format (latex or markdown).
+ * Default to 'latex' if not provided.
  * @returns {Renderer} The renderer instance for the specified template.
  */
 export function getResumeRenderer(
   resume: Resume,
-  summaryParser: Parser = new MarkdownParser()
+  summaryParser: Parser = new MarkdownParser(),
+  format: OutputFormat = 'latex'
 ): Renderer {
   const template = resume.layout?.template
 
   // default to use moderncv banking style if template is not specified
   if (!template) {
-    return new ModerncvBankingRenderer(resume as Resume, summaryParser)
+    return new ModerncvBankingRenderer(resume as Resume, summaryParser, format)
   }
 
   return new (get(RESUME_RENDERER_MAP, template, ModerncvBankingRenderer))(
     resume as Resume,
-    summaryParser
+    summaryParser,
+    format
   )
 }

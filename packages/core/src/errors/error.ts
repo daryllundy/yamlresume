@@ -30,16 +30,18 @@ import { joinNonEmptyString } from '@/utils'
  * First 3 bits for category, last 5 bits for specific errors, total range:
  * 0-255 (8 bits), that is also the range of errno accepted by `process.exit`
  *
- * For now we have 3 categories of errors:
+ * For now we have 4 categories of errors:
  *
  * - File related errors
  * - Format parsing errors
  * - LaTeX related errors
+ * - Output generation errors
  */
 export const ErrorCategory = {
   FILE: 0x00, // 00000000
   FORMAT: 0x20, // 00100000
   LATEX: 0x40, // 01000000
+  OUTPUT: 0x80, // 10000000
 } as const
 
 /**
@@ -120,6 +122,26 @@ export const ErrorType = {
     message: 'LaTeX compilation failed: {error}',
     error: '',
   },
+
+  // Output generation errors (0x80 - 0x9F)
+  INVALID_FORMAT: {
+    code: 'INVALID_FORMAT',
+    errno: ErrorCategory.OUTPUT | 0x01,
+    message: joinNonEmptyString(
+      [
+        'Invalid output format: {format}.',
+        'Supported formats are: latex, markdown.',
+      ],
+      ' '
+    ),
+    format: '',
+  },
+  MARKDOWN_GENERATION_ERROR: {
+    code: 'MARKDOWN_GENERATION_ERROR',
+    errno: ErrorCategory.OUTPUT | 0x02,
+    message: 'Failed to generate markdown output: {error}',
+    error: '',
+  },
 } as const
 
 /**
@@ -133,7 +155,7 @@ export const ErrorUtils = {
    * @returns The category name or undefined if not found
    */
   getCategory(errno: number): keyof typeof ErrorCategory | undefined {
-    const category = errno & 0x60 // 01100000
+    const category = errno & 0xe0 // 11100000
     return Object.entries(ErrorCategory).find(
       ([_, value]) => value === category
     )?.[0] as keyof typeof ErrorCategory
@@ -156,7 +178,7 @@ export const ErrorUtils = {
    * @returns True if the error belongs to the category
    */
   isCategory(errno: number, category: keyof typeof ErrorCategory): boolean {
-    return (errno & 0x60) === ErrorCategory[category]
+    return (errno & 0xe0) === ErrorCategory[category]
   },
 } as const
 

@@ -110,6 +110,10 @@ Commands:
   templates                      manage resume templates
   validate <resume-path>         validate a resume against the YAMLResume schema
   help [command]                 display help for command
+
+Output Formats:
+  --format <format>              output format: latex (default), markdown
+                                 Use markdown format for ATS-friendly plain text output
 ```
 
 You then need to install a typesetting engine, either
@@ -139,6 +143,17 @@ $ yamlresume build my-resume.yml
 ✔ Generated resume PDF file successfully.
 ```
 
+### Markdown Output for ATS
+
+YAMLResume now supports markdown output format, which is perfect for Applicant Tracking Systems (ATS) and plain text submissions:
+
+```
+$ yamlresume build my-resume.yml --format markdown
+✔ Generated resume markdown file successfully.
+```
+
+This generates a clean, ATS-friendly markdown file that preserves your resume structure without LaTeX formatting.
+
 You can also use the [`dev` command](https://yamlresume.dev/docs/cli#dev) to
 rebuild the resume on each file change, which provides **a modern web
 development-like experience**:
@@ -147,6 +162,11 @@ development-like experience**:
 $ yamlresume dev my-resume.yml
 ◐ Generating resume PDF file with command: xelatex -halt-on-error my-resume.tex...
 ✔ Generated resume PDF file successfully.
+◐ Watching file changes: my-resume.yml...
+
+# Or use markdown format in watch mode
+$ yamlresume dev my-resume.yml --format markdown
+✔ Generated resume markdown file successfully.
 ◐ Watching file changes: my-resume.yml...
 ```
 
